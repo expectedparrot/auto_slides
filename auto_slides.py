@@ -8,6 +8,15 @@ app = typer.Typer()
 
 m = Model('gpt-4-1106-preview')
 
+def generate_quiz(content, num_questions):
+    scenario = Scenario({'content':content, 'num_questions':num_questions})
+    q = QuestionList(
+        question_text = """Please create {{num_questions}} asessing student comprehension 
+        of the following content: {{content}}.
+        """, question_name = "quiz_questions")
+    quiz_questions = q.by(m).by(scenario).run()
+    return quiz_questions.select('answer.quiz_questions').first() 
+
 def get_slide_titles(topic, num_slides):
     scenario = Scenario({'topic':topic, 'num_slides':num_slides})
     q_slide_titles = QuestionList(
@@ -38,11 +47,21 @@ def create_markdown(content, filename):
     with open(filename + ".md", 'w') as f:
         f.write('\n\n'.join(list(generate_slides())))
 
+def write_quiz(topic, content, num_questions, filename):
+    questions = generate_quiz(content, num_questions)
+    with open(filename + "_quiz.md", 'a') as f:
+        f.write(f'\n\n# Quiz on {topic}')
+        for index, question in enumerate(questions):
+            f.write(f'\n\n{index + 1}: {question}')
+    subprocess.run(['pandoc', filename + "_quiz.md", '-o', filename + '_quiz.pdf'])           
+
 @app.command()
 def main(filename: str = None, topic: str = None, num_slides: int = None):
 
     slide_titles = get_slide_titles(topic, num_slides)
     content = get_slide_content(topic, slide_titles)
+    write_quiz(topic, content, 5, filename)
+
     create_markdown(content, filename)
 
     args = ['-t', 'beamer', filename + ".md", '-o', filename + '.pdf']
